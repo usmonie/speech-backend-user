@@ -5,6 +5,7 @@ use speech_backend_common::{API_ERROR_NOT_FOUND_CODE, ApiError, ApiResult};
 use speech_backend_common::domain::UseCase;
 use speech_backend_sessions::models::request::{AddUserToSessionRequest, GetSessionRequest, UpdateSessionIpRequest};
 use speech_backend_sessions::models::results::Session;
+use tokio::join;
 
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -17,6 +18,7 @@ use crate::models::User;
 pub struct CreateUserUseCase {
     user_repository: Arc<Mutex<dyn UsersRepository + Send + Sync>>,
     get_session_use_case: Arc<Mutex<dyn UseCase<GetSessionRequest, Session> + Send + Sync>>,
+    update_session_ip_use_case: Arc<Mutex<dyn UseCase<UpdateSessionIpRequest, Session> + Send + Sync>>,
     add_user_to_session_use_case: Arc<Mutex<dyn UseCase<AddUserToSessionRequest, Session> + Send + Sync>>,
 }
 
@@ -25,6 +27,18 @@ impl UseCase<CreateUserRequest, User> for CreateUserUseCase {
     async fn execute(&self, request: CreateUserRequest) -> ApiResult<User> {
         let session: ApiResult<Session> = get_session_use_case
             .execute(GetSessionRequest { id: request.session_id.to_string() })
+            .and_then( |session| async move {
+
+                self.get_session_use_case
+                    .lock()
+                    .await
+                    .execute(GetSessionRequest { id: request.session_id.to_string() })
+                    .and_then(|session| async move {
+
+
+                    });
+            }
+        )
             .await;
 
         let session = match session {
@@ -70,23 +84,25 @@ pub struct CheckIsUsernameAvailableUseCase {
 #[async_trait]
 impl UseCase<CheckIsUsernameAvailableRequest, bool> for CheckIsUsernameAvailableUseCase {
     async fn execute(&self, request: CheckIsUsernameAvailableRequest) -> ApiResult<bool> {
-        let session: ApiResult<Session> = self.get_session_use_case.lock()
-            .await
-            .execute(GetSessionRequest { id: request.session_id.to_string() })
-            .await;
+        {
+            let session: ApiResult<Session> = self.get_session_use_case
+                .lock()
+                .await
+                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .await;
 
-        match session {
-            ApiResult::Ok(session) => {
-                self.update_session_ip_use_case.lock().await
-                    .execute(UpdateSessionIpRequest {
-                        session_id: session.id.parse().unwrap(),
-                        latest_ip_address: request.ip_addr,
-                        session_key: session.session_key,
-                    }).await;
-            }
-            ApiResult::Err(error) => return ApiResult::Err(*error)
-        };
-
+            match session {
+                ApiResult::Ok(session) => {
+                    self.update_session_ip_use_case.lock().await
+                        .execute(UpdateSessionIpRequest {
+                            session_id: session.id.parse().unwrap(),
+                            latest_ip_address: request.ip_addr,
+                            session_key: session.session_key,
+                        }).await;
+                }
+                ApiResult::Err(error) => return ApiResult::Err(*error)
+            };
+        }
 
         let user_result = self.user_repository.lock().await
             .get_user_by_username(request.username.as_str())
@@ -111,7 +127,9 @@ pub struct CheckPasswordUseCase {
 impl UseCase<CheckPasswordRequest, bool> for CheckPasswordUseCase {
     async fn execute(&self, request: CheckPasswordRequest) -> ApiResult<bool> {
         {
-            let session: ApiResult<Session> = get_session_use_case
+            let session: ApiResult<Session> = self.get_session_use_case
+                .lock()
+                .await
                 .execute(GetSessionRequest { id: request.session_id.to_string() })
                 .await;
 
@@ -157,7 +175,9 @@ pub struct UpdatePasswordUseCase {
 impl UseCase<UpdatePasswordRequest, bool> for UpdatePasswordUseCase {
     async fn execute(&self, request: UpdatePasswordRequest) -> ApiResult<bool> {
         {
-            let session: ApiResult<Session> = get_session_use_case
+            let session: ApiResult<Session> = self.get_session_use_case
+                .lock()
+                .await
                 .execute(GetSessionRequest { id: request.session_id.to_string() })
                 .await;
 
@@ -176,7 +196,10 @@ impl UseCase<UpdatePasswordRequest, bool> for UpdatePasswordUseCase {
                 password_pepper: request.password_pepper,
             }).await;
 
-        match is_password_valid {}
+        // match is_password_valid {
+        //     ApiResult::Ok(_) => {}
+        //     ApiResult::Err(_) => {}
+        // }
         if is_password_valid {
             let new_password_hash = enigma::encrypt_password(
                 &*request.new_user_password,
@@ -204,7 +227,9 @@ pub struct SearchUserByUsernameUseCase {
 impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase {
     async fn execute(&self, request: SearchUserByUsernameRequest) -> ApiResult<User> {
         {
-            let session: ApiResult<Session> = get_session_use_case
+            let session: ApiResult<Session> = self.get_session_use_case
+                .lock()
+                .await
                 .execute(GetSessionRequest { id: request.session_id.to_string() })
                 .await;
 
@@ -213,7 +238,6 @@ impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase 
                 ApiResult::Err(error) => return ApiResult::Err(*error)
             };
         }
-
 
 
         todo!()
