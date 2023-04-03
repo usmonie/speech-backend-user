@@ -40,5 +40,29 @@ pub mod request {
     pub struct CheckIsUsernameAvailableRequest {
         pub session_id: String,
         pub username: String,
+        pub ip_addr: IpAddr
+    }
+
+    pub struct CheckPasswordRequest {
+        pub session_id: String,
+        pub user_id: String,
+        pub user_password: Vec<u8>,
+        pub password_pepper: Vec<u8>
+    }
+
+    pub struct UpdatePasswordRequest {
+        pub session_id: String,
+        pub user_id: String,
+        pub previous_password: Vec<u8>,
+        pub new_user_password: Vec<u8>,
+        pub password_salt: Vec<u8>,
+        pub password_pepper: Vec<u8>
+    }
+
+    pub struct SearchUserByUsernameRequest {
+        pub session_id: String,
+        pub user_id: String,
+
+        pub search_username: String
     }
 }

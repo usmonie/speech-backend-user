@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 speech-backend-common = { git = "https://github.com/usmonie/speech-backend-common" }
 speech-backend-sessions = { git = "https://github.com/usmonie/speech-backend-sessions" }
+enigma = { git = "https://github.com/Speech-W-Team/enigma" }
 
 async-trait = "0.1.66"
 tokio = { version = "1.26.0", features = ["full"] }
