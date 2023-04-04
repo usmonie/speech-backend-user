@@ -1,5 +1,8 @@
-use std::str::FromStr;
+use std::future::{Future, ready};
 use std::sync::Arc;
+use std::task::Poll::Ready;
+use std::task::ready;
+use async_trait::async_trait;
 
 use speech_backend_common::{API_ERROR_NOT_FOUND_CODE, ApiError, ApiResult};
 use speech_backend_common::domain::UseCase;
@@ -8,12 +11,10 @@ use speech_backend_sessions::models::results::Session;
 use tokio::join;
 
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::data::UsersRepository;
 use crate::models::request::{CheckIsUsernameAvailableRequest, CheckPasswordRequest, CreateUserRequest, SearchUserByUsernameRequest, UpdatePasswordRequest};
 use crate::models::results::User;
-use crate::models::User;
 
 pub struct CreateUserUseCase {
     user_repository: Arc<Mutex<dyn UsersRepository + Send + Sync>>,
@@ -25,25 +26,12 @@ pub struct CreateUserUseCase {
 #[async_trait]
 impl UseCase<CreateUserRequest, User> for CreateUserUseCase {
     async fn execute(&self, request: CreateUserRequest) -> ApiResult<User> {
-        let session: ApiResult<Session> = get_session_use_case
-            .execute(GetSessionRequest { id: request.session_id.to_string() })
-            .and_then( |session| async move {
-
-                self.get_session_use_case
-                    .lock()
-                    .await
-                    .execute(GetSessionRequest { id: request.session_id.to_string() })
-                    .and_then(|session| async move {
-
-
-                    });
-            }
-        )
-            .await;
-
-        let session = match session {
-            ApiResult::Ok(session) => session,
-            ApiResult::Err(error) => return ApiResult::Err(*error)
+        let session = async {
+            self.get_session_use_case
+                .lock()
+                .await
+                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .await
         };
 
         let user_result = self.user_repository.lock().await
@@ -100,7 +88,7 @@ impl UseCase<CheckIsUsernameAvailableRequest, bool> for CheckIsUsernameAvailable
                             session_key: session.session_key,
                         }).await;
                 }
-                ApiResult::Err(error) => return ApiResult::Err(*error)
+                ApiResult::Err(error) => return ApiResult::Err(error)
             };
         }
 
@@ -135,7 +123,7 @@ impl UseCase<CheckPasswordRequest, bool> for CheckPasswordUseCase {
 
             match session {
                 ApiResult::Ok(_) => {}
-                ApiResult::Err(error) => return ApiResult::Err(*error)
+                ApiResult::Err(error) => return ApiResult::Err(error)
             };
         }
 
@@ -183,37 +171,40 @@ impl UseCase<UpdatePasswordRequest, bool> for UpdatePasswordUseCase {
 
             match session {
                 ApiResult::Ok(_) => {}
-                ApiResult::Err(error) => return ApiResult::Err(*error)
+                ApiResult::Err(error) => return ApiResult::Err(error)
             };
         }
-        let repository = self.user_repository.lock().await;
+        let mut repository = self.user_repository.lock().await;
 
         let is_password_valid = self.check_password_use_case.lock().await
             .execute(CheckPasswordRequest {
-                session_id: request.session_id,
-                user_id: request.user_id,
-                user_password: request.previous_password,
-                password_pepper: request.password_pepper,
+                session_id: request.session_id.clone(),
+                user_id: request.user_id.clone(),
+                user_password: request.previous_password.clone(),
+                password_pepper: request.password_pepper.clone(),
             }).await;
 
         // match is_password_valid {
         //     ApiResult::Ok(_) => {}
         //     ApiResult::Err(_) => {}
         // }
-        if is_password_valid {
+
+        if is_password_valid.is_ok() {
             let new_password_hash = enigma::encrypt_password(
                 &*request.new_user_password,
                 &*request.password_salt,
-                &*request.password_pepper,
+                &request.password_pepper,
             );
             repository.store_user_password_hash(
-                &*request.user_id,
+                &request.user_id,
                 new_password_hash.to_vec(),
                 request.password_salt,
             );
         }
 
-        ApiResult::Ok(is_password_valid)
+        todo!()
+        //
+        // ApiResult::Ok(is_password_valid)
     }
 }
 
@@ -235,10 +226,9 @@ impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase 
 
             match session {
                 ApiResult::Ok(_) => {}
-                ApiResult::Err(error) => return ApiResult::Err(*error)
+                ApiResult::Err(error) => return ApiResult::Err(error)
             };
         }
-
 
         todo!()
     }

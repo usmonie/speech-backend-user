@@ -1,4 +1,5 @@
 pub mod results {
+    use speech_backend_media::models::result::GraphicMedia;
     use uuid::Uuid;
 
     pub struct User {
@@ -8,7 +9,7 @@ pub mod results {
         pub about: Option<String>,
 
         pub username: String,
-        pub avatar: Option<GraphicMediaCore>,
+        pub avatar: Option<GraphicMedia>,
 
         pub two_factor_auth_code: String,
         pub email: String,
