@@ -1,14 +1,11 @@
-use std::future::{Future, ready};
 use std::sync::Arc;
-use std::task::Poll::Ready;
-use std::task::ready;
 use async_trait::async_trait;
+use futures::TryFutureExt;
 
 use speech_backend_common::{API_ERROR_NOT_FOUND_CODE, ApiError, ApiResult};
 use speech_backend_common::domain::UseCase;
 use speech_backend_sessions::models::request::{AddUserToSessionRequest, GetSessionRequest, UpdateSessionIpRequest};
 use speech_backend_sessions::models::results::Session;
-use tokio::join;
 
 use tokio::sync::Mutex;
 
@@ -26,15 +23,8 @@ pub struct CreateUserUseCase {
 #[async_trait]
 impl UseCase<CreateUserRequest, User> for CreateUserUseCase {
     async fn execute(&self, request: CreateUserRequest) -> ApiResult<User> {
-        let session = async {
-            self.get_session_use_case
-                .lock()
-                .await
-                .execute(GetSessionRequest { id: request.session_id.to_string() })
-                .await
-        };
-
-        let user_result = self.user_repository.lock().await
+        let mut user_repository = self.user_repository.lock().await;
+        let user_request = user_repository
             .store_user(
                 request.name,
                 request.about,
@@ -42,24 +32,44 @@ impl UseCase<CreateUserRequest, User> for CreateUserUseCase {
                 request.avatar,
                 request.two_factor_auth_code,
                 request.email,
-            ).await;
+            );
 
-        match &user_result {
-            ApiResult::Ok(user) => {
-                self.add_user_to_session_use_case.lock()
-                    .await
-                    .execute(AddUserToSessionRequest {
-                        session_id: request.session_id,
+        let session = self.get_session_use_case
+            .lock()
+            .await
+            .execute(GetSessionRequest { id: request.session_id.to_string() })
+            .await;
+
+        return match session {
+            ApiResult::Ok(session) => {
+                if session.ip_address != request.ip_address {
+                    self.update_session_ip_use_case.lock().await.execute(UpdateSessionIpRequest {
+                        session_id: request.session_id.clone(),
                         latest_ip_address: request.ip_address,
-                        user_id: user.id,
-                        session_key: session.session_key,
-                        user_password_hash: request.user_password_hash,
+                        session_key: session.session_key.clone(),
                     }).await;
+                }
 
-                user_result
+                return match user_request.await {
+                    ApiResult::Ok(user) => {
+                        drop(
+                            self.add_user_to_session_use_case.lock()
+                                .await
+                                .execute(AddUserToSessionRequest {
+                                    session_id: request.session_id,
+                                    latest_ip_address: request.ip_address,
+                                    user_id: user.id.clone(),
+                                    session_key: session.session_key,
+                                    user_password_hash: request.user_password_hash,
+                                })
+                        );
+                        ApiResult::Ok(user)
+                    }
+                    ApiResult::Err(error) => ApiResult::Err(error)
+                };
             }
-            ApiResult::Err(_) => user_result
-        }
+            ApiResult::Err(error) => ApiResult::Err(error)
+        };
     }
 }
 
@@ -230,6 +240,18 @@ impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase 
             };
         }
 
+        todo!()
+    }
+}
+
+pub struct AddUserToSessionUseCase {
+    user_repository: Arc<Mutex<dyn UsersRepository + Send + Sync>>,
+
+}
+
+#[async_trait]
+impl UseCase<AddUserToSessionRequest, User> for SearchUserByUsernameUseCase {
+    async fn execute(&self, request: AddUserToSessionRequest) -> ApiResult<User> {
         todo!()
     }
 }
