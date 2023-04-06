@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use async_trait::async_trait;
-use futures::TryFutureExt;
 
 use speech_backend_common::{API_ERROR_NOT_FOUND_CODE, ApiError, ApiResult};
 use speech_backend_common::domain::UseCase;
@@ -240,18 +239,6 @@ impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase 
             };
         }
 
-        todo!()
-    }
-}
-
-pub struct AddUserToSessionUseCase {
-    user_repository: Arc<Mutex<dyn UsersRepository + Send + Sync>>,
-
-}
-
-#[async_trait]
-impl UseCase<AddUserToSessionRequest, User> for SearchUserByUsernameUseCase {
-    async fn execute(&self, request: AddUserToSessionRequest) -> ApiResult<User> {
         todo!()
     }
 }
