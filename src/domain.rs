@@ -36,7 +36,7 @@ impl UseCase<CreateUserRequest, User> for CreateUserUseCase {
         let session = self.get_session_use_case
             .lock()
             .await
-            .execute(GetSessionRequest { id: request.session_id.to_string() })
+            .execute(GetSessionRequest { id: request.session_id })
             .await;
 
         return match session {
@@ -85,14 +85,14 @@ impl UseCase<CheckIsUsernameAvailableRequest, bool> for CheckIsUsernameAvailable
             let session: ApiResult<Session> = self.get_session_use_case
                 .lock()
                 .await
-                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .execute(GetSessionRequest { id: request.session_id })
                 .await;
 
             match session {
                 ApiResult::Ok(session) => {
                     self.update_session_ip_use_case.lock().await
                         .execute(UpdateSessionIpRequest {
-                            session_id: session.id.parse().unwrap(),
+                            session_id: session.id,
                             latest_ip_address: request.ip_addr,
                             session_key: session.session_key,
                         }).await;
@@ -127,7 +127,7 @@ impl UseCase<CheckPasswordRequest, bool> for CheckPasswordUseCase {
             let session: ApiResult<Session> = self.get_session_use_case
                 .lock()
                 .await
-                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .execute(GetSessionRequest { id: request.session_id })
                 .await;
 
             match session {
@@ -175,7 +175,7 @@ impl UseCase<UpdatePasswordRequest, bool> for UpdatePasswordUseCase {
             let session: ApiResult<Session> = self.get_session_use_case
                 .lock()
                 .await
-                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .execute(GetSessionRequest { id: request.session_id })
                 .await;
 
             match session {
@@ -230,7 +230,7 @@ impl UseCase<SearchUserByUsernameRequest, User> for SearchUserByUsernameUseCase 
             let session: ApiResult<Session> = self.get_session_use_case
                 .lock()
                 .await
-                .execute(GetSessionRequest { id: request.session_id.to_string() })
+                .execute(GetSessionRequest { id: request.session_id })
                 .await;
 
             match session {
